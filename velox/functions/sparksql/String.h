@@ -1130,4 +1130,57 @@ struct ReplaceFunction {
   }
 };
 
+template <typename T>
+struct FindInSetFunction {
+  VELOX_DEFINE_FUNCTION_TYPES(T);
+
+  FOLLY_ALWAYS_INLINE void callNullFree(
+      out_type<int32_t>& result,
+      const null_free_arg_type<Varchar>& str,
+      const null_free_arg_type<Varchar>& strArray) {
+    doCall(result, str, strArray);
+  }
+
+  FOLLY_ALWAYS_INLINE void
+  doCall(out_type<int32_t>& result, StringView match, StringView strArray) {
+    int32_t index = 1;
+    int32_t lastComma = -1;
+
+    auto matchString = match.str();
+    auto strArrayString = strArray.str();
+
+    auto found = matchString.find(',');
+    if (found != std::string::npos) {
+      result = 0;
+      return;
+    }
+
+    auto strArrayData = strArrayString.c_str();
+    size_t strArraySize = strArrayString.size();
+    size_t matchSize = matchString.size();
+
+    for (int i = 0; i < strArraySize; i++) {
+      if (strArrayData[i] == ',') {
+        if (i - (lastComma + 1) == matchSize &&
+            strArrayString.compare(lastComma + 1, i - (lastComma + 1), matchString) == 0) {
+          result = index;
+          return;
+        }
+        lastComma = i;
+        index++;
+      }
+    }
+
+    if (strArraySize - (lastComma + 1) == matchSize) {
+      if (strArrayString.compare(lastComma + 1, strArraySize - (lastComma + 1), matchString) == 0) {
+        result = index;
+        return true;
+      }
+    }
+
+    result = 0;
+    return;
+  }
+};
+
 } // namespace facebook::velox::functions::sparksql
